@@ -46,7 +46,7 @@ where
     }
 }
 
-impl<T: Clone + Debug + Display> LinkedList<T> {
+impl<T> LinkedList<T> {
     pub fn new() -> Self {
         LinkedList {
             head: None,
@@ -59,16 +59,22 @@ impl<T: Clone + Debug + Display> LinkedList<T> {
         self.head.is_none()
     }
 
+    pub fn len(&self) -> usize {
+        self.len
+    }
+}
+
+impl<T: Clone + Debug + Display> LinkedList<T> {
     pub fn push_front(&mut self, data: T) {
         let new_node = Rc::new(RefCell::new(Node::new(data)));
 
-        if self.is_empty() {
-            self.tail = Some(Rc::clone(&new_node));
-            self.head = Some(Rc::clone(&new_node));
+        if let Some(prev_head) = self.head.take() {
+            prev_head.borrow_mut().prev = Some(new_node.clone());
+            new_node.borrow_mut().next = Some(prev_head);
+            self.head = Some(new_node);
         } else {
-            new_node.borrow_mut().next = Some(Rc::clone(self.head.as_ref().unwrap()));
-            self.head.as_ref().unwrap().borrow_mut().prev = Some(Rc::clone(&new_node));
-            self.head = Some(Rc::clone(&new_node));
+            self.tail = Some(new_node.clone());
+            self.head = Some(new_node);
         }
         self.len += 1;
     }
@@ -76,13 +82,13 @@ impl<T: Clone + Debug + Display> LinkedList<T> {
     pub fn push_back(&mut self, data: T) {
         let new_node = Rc::new(RefCell::new(Node::new(data)));
 
-        if self.is_empty() {
-            self.tail = Some(Rc::clone(&new_node));
-            self.head = Some(Rc::clone(&new_node));
+        if let Some(old_tail) = self.tail.take() {
+            old_tail.borrow_mut().next = Some(new_node.clone());
+            new_node.borrow_mut().prev = Some(old_tail);
+            self.tail = Some(new_node);
         } else {
-            self.tail.as_ref().unwrap().borrow_mut().next = Some(Rc::clone(&new_node));
-            new_node.borrow_mut().prev = Some(Rc::clone(self.tail.as_ref().unwrap()));
-            self.tail = Some(Rc::clone(&new_node));
+            self.head = Some(new_node.clone());
+            self.tail = Some(new_node);
         }
         self.len += 1;
     }
@@ -92,22 +98,17 @@ impl<T: Clone + Debug + Display> LinkedList<T> {
             panic!("empty LinkedList");
         }
 
-        let curr_head = Rc::clone(self.head.as_ref().unwrap());
-        let data = curr_head.borrow_mut().data.clone();
+        let prev_head = self.head.take()?;
+        let mut prev_head_borrow = prev_head.borrow_mut();
 
-        match curr_head.borrow_mut().next.as_ref() {
-            Some(next) => {
-                let next = Rc::clone(next);
-                next.borrow_mut().prev = None;
-                self.head = Some(next);
-            }
-            None => {
-                self.head = None;
-                self.tail = None;
-            }
+        if let Some(next_node) = prev_head_borrow.next.take() {
+            next_node.borrow_mut().prev = None;
+            self.head = Some(next_node);
+        } else {
+            self.tail = None;
         }
         self.len -= 1;
-        Some(data)
+        Some(prev_head_borrow.data.clone())
     }
 
     pub fn pop_back(&mut self) -> Option<T> {
@@ -115,22 +116,17 @@ impl<T: Clone + Debug + Display> LinkedList<T> {
             panic!("empty LinkedList");
         }
 
-        let curr_tail = Rc::clone(self.tail.as_ref().unwrap());
-        let data = curr_tail.borrow_mut().data.clone();
+        let prev_tail = self.tail.take()?;
+        let mut prev_tail_borrow = prev_tail.borrow_mut();
 
-        match curr_tail.borrow_mut().prev.as_ref() {
-            Some(prev) => {
-                let prev = Rc::clone(prev);
-                prev.borrow_mut().next = None;
-                self.tail = Some(prev);
-            }
-            None => {
-                self.head = None;
-                self.tail = None;
-            }
+        if let Some(prev_node) = prev_tail_borrow.prev.take() {
+            prev_node.borrow_mut().next = None;
+            self.tail = Some(prev_node);
+        } else {
+            self.head = None;
         }
         self.len -= 1;
-        Some(data)
+        Some(prev_tail_borrow.data.clone())
     }
 
     pub fn remove(&mut self, data: T) -> Option<T> {
